@@ -37,7 +37,7 @@ def run_query(
     query: str,
     source: str = "umin_ctr",
     formats: list[str] | None = None,
-    output_root: str = "outputs",
+    output_root: str = "output",
     run_id: str | None = None,
     literature: LiteratureInput | None = None,
 ) -> ExportResult:
@@ -148,7 +148,7 @@ def run_batch(
     input_path: str,
     input_format: str = "txt",
     formats: list[str] | None = None,
-    output_root: str = "outputs",
+    output_root: str = "output",
 ) -> BatchResult:
     formats = formats or ["csv"]
     output_root_path = Path(output_root).expanduser().resolve()

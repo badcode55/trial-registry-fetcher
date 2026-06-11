@@ -28,7 +28,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="csv",
         help="Comma-separated export formats. Available now: csv,json,txt,md. Default: csv",
     )
-    parser.add_argument("--output-dir", default="outputs", help="Base output directory. Default: outputs")
+    parser.add_argument("--output-dir", default="output", help="Base output directory. Default: output")
     parser.add_argument(
         "--all-matches",
         action="store_true",
