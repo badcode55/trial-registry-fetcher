@@ -1,0 +1,20 @@
+{
+  "run_id": "smoke-umin",
+  "query": {
+    "raw_input": "UMIN000019339",
+    "query_type": "umin_id",
+    "source_hint": "umin_ctr"
+  },
+  "source": "umin_ctr",
+  "formats": [
+    "csv"
+  ],
+  "match_count": 1,
+  "saved_count": 1,
+  "failure_count": 0,
+  "failures": [],
+  "files": {
+    "csv": "/Users/badc0de/Documents/数据获取/outputs/smoke-umin/results.csv"
+  },
+  "created_at_utc": "2026-06-11T08:57:24.501082+00:00"
+}
