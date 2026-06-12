@@ -76,16 +76,22 @@ def main() -> int:
 
 def restore_paths_from_branch(repo: Path, branch: str, paths: list[str]) -> None:
     for rel_path in paths:
-        git(["checkout", branch, "--", rel_path], repo)
+        if path_exists_in_branch(repo, branch, rel_path):
+            git(["checkout", branch, "--", rel_path], repo)
+        else:
+            remove_path(repo / rel_path)
 
 
 def remove_dev_only_paths(repo: Path) -> None:
     for rel_path in DEV_ONLY_PATHS:
-        path = repo / rel_path
-        if path.is_dir():
-            shutil.rmtree(path)
-        elif path.exists():
-            path.unlink()
+        remove_path(repo / rel_path)
+
+
+def remove_path(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
 
 
 def remove_generated_output(repo: Path) -> None:
@@ -104,7 +110,8 @@ def stage_sync_changes(repo: Path) -> None:
     # 只暂存精选同步路径，避免把使用者本地未跟踪笔记或临时文件带入 main。
     # Stage only the curated sync set so local untracked notes/temp files never leak into main.
     for rel_path in SYNC_PATHS:
-        git(["add", "-A", "--", rel_path], repo)
+        if (repo / rel_path).exists() or is_tracked(repo, rel_path):
+            git(["add", "-A", "--", rel_path], repo)
     for rel_path in DEV_ONLY_PATHS:
         if (repo / rel_path).exists() or is_tracked(repo, rel_path):
             git(["add", "-A", "--", rel_path], repo)
@@ -112,6 +119,10 @@ def stage_sync_changes(repo: Path) -> None:
 
 def is_tracked(repo: Path, rel_path: str) -> bool:
     return git(["ls-files", "--error-unmatch", rel_path], repo, check=False).returncode == 0
+
+
+def path_exists_in_branch(repo: Path, branch: str, rel_path: str) -> bool:
+    return git(["cat-file", "-e", f"{branch}:{rel_path}"], repo, check=False).returncode == 0
 
 
 def git(args: list[str], repo: Path, *, check: bool = True):
