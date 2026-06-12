@@ -24,6 +24,9 @@ SYNC_PATHS = [
 DEV_ONLY_PATHS = [
     "dev_tools",
     "PROJECT_PLAN.md",
+    "scripts/sync_dev_to_main.bat",
+    "scripts/sync_dev_to_main.py",
+    "scripts/sync_dev_to_main.sh",
     "tests",
     "跨注册库JSON canonical protocol JSON 设计.md",
 ]
