@@ -38,8 +38,7 @@
 │   ├── registry_ids.py               判断 UMIN、NCT、not found 等 ID 类型
 │   ├── sources/                      不同注册网站的适配器
 │   └── exporters/                    CSV、JSON、Markdown、TXT 导出器
-├── tests/                            自动测试，仅 dev 分支保留
-└── umin_ctr_scraper.py               旧入口，保留兼容
+└── tests/                            自动测试，仅 dev 分支保留
 ```
 
 ## 第一次使用
