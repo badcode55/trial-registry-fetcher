@@ -17,14 +17,12 @@ SYNC_PATHS = [
     "scripts/run_example.bat",
     "scripts/run_example.command",
     "scripts/run_example.sh",
-    "scripts/sync_dev_to_main.bat",
-    "scripts/sync_dev_to_main.py",
-    "scripts/sync_dev_to_main.sh",
     "trial_registry",
     "umin_ctr_scraper.py",
 ]
 
 DEV_ONLY_PATHS = [
+    "dev_tools",
     "PROJECT_PLAN.md",
     "tests",
     "跨注册库JSON canonical protocol JSON 设计.md",

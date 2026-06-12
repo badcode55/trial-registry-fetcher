@@ -5,6 +5,7 @@
 - `main`: user-facing branch. Keep code, README, examples, scripts, requirements, and `output/.gitkeep`.
 - `dev`: development branch. Keep everything from `main`, plus tests and development planning documents.
 - `跨注册库JSON canonical protocol JSON 设计.md` is dev-only and must not be synced to `main`.
+- `dev_tools/` is dev-only and must not be synced to `main`.
 
 ## Current Feature Scope
 
@@ -43,9 +44,10 @@
 
 ## dev to main Sync Policy
 
-- Use `scripts/sync_dev_to_main.py` or `bash scripts/sync_dev_to_main.sh`.
+- Use `dev_tools/sync_dev_to_main.py` or `bash dev_tools/sync_dev_to_main.sh`.
 - The sync script copies only user-facing files from `dev` to `main`.
 - Do not sync:
+  - `dev_tools/`
   - `PROJECT_PLAN.md`
   - `tests/`
   - `跨注册库JSON canonical protocol JSON 设计.md`
