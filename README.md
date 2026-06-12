@@ -1,16 +1,15 @@
 # 文献注册信息抓取工具
 
-这个工具用于读取一份“文献 PDF 文件名 + 注册 ID”的清单，并尝试抓取已经接入的网站信息。当前版本只会实际抓取 UMIN-CTR；NCT 和其他网站的 ID 会先记录到索引中，后续可以继续接入。
+这个工具用于读取一份“文献 PDF 文件名 + 注册 ID”的清单，并自动抓取已接入注册网站的信息。当前支持 `UMIN...` 和 `NCT...`，暂时不会根据文献题目、关键词或 PDF 文件名自动搜索注册库。
 
 ## 这个程序会做什么
 
 - 读取 `examples/literature_ids.txt` 这样的清单。
-- 对 `UMIN...` 编号，到 UMIN-CTR 网站获取研究注册信息。
-- 对 `NCT...` 编号，先记录为 `pending_source_integration`，等待之后接入师姐的 NCT 代码。
+- 对 `UMIN...` 编号，到 UMIN-CTR 获取研究注册信息。
+- 对 `NCT...` 编号，到 ClinicalTrials.gov 获取研究注册信息。
 - 对 `not found`，记录为 `not_found`，表示当前没有找到注册 ID。
 - 生成 Excel 可以直接打开的 CSV 文件，中文和日文不应乱码。
-
-当前版本不会根据文献题目、关键词或 PDF 文件名自动搜索注册库。
+- 额外保存来源专属 protocol JSON，方便后续和师姐讨论统一 JSON 格式。
 
 ## 项目结构
 
@@ -18,6 +17,8 @@
 .
 ├── README.md                         使用说明
 ├── PROJECT_PLAN.md                   开发计划，仅 dev 分支保留
+├── 跨注册库JSON canonical protocol JSON 设计.md
+│                                      统一 JSON 设计记录，仅 dev 分支保留
 ├── requirements.txt                  Python 依赖列表
 ├── examples/
 │   └── literature_ids.txt            示例输入清单
@@ -26,10 +27,13 @@
 ├── scripts/
 │   ├── run_example.sh                macOS/Linux 终端运行脚本
 │   ├── run_example.command           macOS 双击运行脚本
-│   └── run_example.bat               Windows 运行脚本
+│   ├── run_example.bat               Windows 运行脚本
+│   ├── sync_dev_to_main.py           将 dev 的可运行内容同步到 main
+│   ├── sync_dev_to_main.sh           macOS/Linux 同步脚本入口
+│   └── sync_dev_to_main.bat          Windows 同步脚本入口
 ├── trial_registry/                   程序代码
 │   ├── cli.py                        命令行入口
-│   ├── runner.py                     批量处理和输出索引逻辑
+│   ├── runner.py                     批量处理、导出和索引逻辑
 │   ├── input_readers.py              读取 TXT 输入清单
 │   ├── registry_ids.py               判断 UMIN、NCT、not found 等 ID 类型
 │   ├── sources/                      不同注册网站的适配器
@@ -100,6 +104,12 @@ python3 -m trial_registry.cli --input-file examples/literature_ids.txt --input-f
 python3 -m trial_registry.cli UMIN000019339 --formats csv --output-dir output
 ```
 
+单独查询一个 NCT ID：
+
+```bash
+python3 -m trial_registry.cli NCT00508690 --formats csv --output-dir output
+```
+
 ## 如何查看结果
 
 运行后，先打开总索引：
@@ -111,8 +121,8 @@ output/index.csv
 总索引中每一行对应输入清单中的一篇文献。常见状态如下：
 
 - `saved`：已经抓取并保存结果。
-- `pending_source_integration`：这个注册网站还没有接入，例如当前的 NCT。
 - `not_found`：输入清单中标记为未找到注册 ID。
+- `pending_source_integration`：这个注册网站还没有接入。
 - `invalid_input`：输入行格式不符合要求。
 
 如果某一行是 `saved`，请查看这一列：
@@ -122,6 +132,31 @@ result_csv
 ```
 
 它会指向该文献单独生成的 CSV 文件。
+
+每个成功查询会生成一个独立目录，例如：
+
+```text
+output/11_hata_2016_nct00508690/
+```
+
+NCT 查询目录中通常包含：
+
+```text
+11_hata_2016_nct00508690.csv
+NCT_protocol.json
+NCT_raw.json
+manifest.json
+```
+
+UMIN 查询目录中通常包含：
+
+```text
+11_ikeda_2016_umin000019339.csv
+UMIN_protocol.json
+manifest.json
+```
+
+`NCT_protocol.json` 兼容师姐之前使用的 `_protocol.json` 结构。`UMIN_protocol.json` 按 UMIN 网页自己的字段结构保存，不强行套用 NCT 的字段含义。
 
 ## 输入文件格式
 
@@ -137,12 +172,29 @@ TXT 文件每行写一篇文献：
 
 ## 开发说明
 
-新增注册网站时，主要做两件事：
+新增注册网站时，主要做三件事：
 
 1. 在 `trial_registry/registry_ids.py` 增加 ID 识别规则。
 2. 在 `trial_registry/sources/` 增加一个新的 `RegistrySource` 适配器。
+3. 在 `跨注册库JSON canonical protocol JSON 设计.md` 记录该来源和其他来源之间可映射、弱映射、不可映射的字段。
 
-这样可以避免改动批量处理和导出逻辑。
+如果新来源需要额外 JSON 文件，请在 source adapter 中实现 `write_sidecar_files`，不要把来源判断写进主流程。
+
+## dev 同步到 main
+
+开发完成并提交到 `dev` 后，可以运行：
+
+```bash
+bash scripts/sync_dev_to_main.sh
+```
+
+这个脚本只把使用者需要运行程序的内容同步到 `main`。它不会同步 `PROJECT_PLAN.md`、`tests/`、`跨注册库JSON canonical protocol JSON 设计.md` 或运行输出。
+
+默认不会推送 GitHub。如果需要同步后推送：
+
+```bash
+bash scripts/sync_dev_to_main.sh --push
+```
 
 ## 测试
 

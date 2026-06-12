@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -20,3 +22,9 @@ def fetch_html(url: str, *, data: dict[str, str] | None = None, timeout: int = 3
     request = Request(url, data=body, headers=headers)
     with urlopen(request, timeout=timeout) as response:
         return response.read().decode("utf-8", errors="replace")
+
+
+def fetch_json(url: str, *, timeout: int = 30) -> dict[str, Any]:
+    request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    with urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8", errors="replace"))

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import re
+import json
 from collections import OrderedDict
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
 from ..http import fetch_html
 from ..text import extract_fragment_text, insert_value, iter_flattened, normalize_text, slugify
-from ..types import NormalizedRow, QueryInput, SearchMatch, StudyRecord
+from ..types import LiteratureInput, NormalizedRow, QueryInput, SearchMatch, StudyRecord
 from .base import RegistrySource
 
 
@@ -185,6 +187,23 @@ class UminCtrSource(RegistrySource):
 
         return row
 
+    def write_sidecar_files(
+        self,
+        record: StudyRecord,
+        *,
+        output_dir: Path,
+        literature: LiteratureInput | None = None,
+    ) -> dict[str, Path]:
+        protocol_path = output_dir / "UMIN_protocol.json"
+        write_json(
+            protocol_path,
+            build_umin_protocol(
+                record,
+                source_file=literature.literature_file if literature else "",
+            ),
+        )
+        return {"umin_protocol": protocol_path}
+
 
 def extract_recptno(target: str) -> str:
     if target.startswith(("http://", "https://")):
@@ -345,3 +364,78 @@ def stringify_meta_from_mapping(mapping: OrderedDict[str, object], key: str) -> 
     if isinstance(value, list):
         return "\n".join(str(item) for item in value if item is not None)
     return str(value) if value is not None else ""
+
+
+def build_umin_protocol(record: StudyRecord, *, source_file: str = "") -> OrderedDict[str, object]:
+    # UMIN 不强行套用 NCT protocolSection，避免把不同来源的字段语义混在一起。
+    # UMIN keeps its own source-shaped protocol JSON instead of pretending to be NCT protocolSection.
+    protocol: OrderedDict[str, object] = OrderedDict()
+    protocol["registration_number"] = stringify_meta(record, "Unique ID issued by UMIN")
+    protocol["receipt_number"] = record.record_id
+    protocol["source_file"] = source_file
+    protocol["source_registry"] = "UMIN-CTR"
+    protocol["detail_url"] = record.detail_url
+    protocol["fetched_at"] = record.fetched_at
+    protocol["identification"] = OrderedDict(
+        [
+            ("umin_id", stringify_meta(record, "Unique ID issued by UMIN")),
+            ("receipt_number", record.record_id),
+            ("public_title", get_path_value(record, "Basic information.Public title")),
+            ("scientific_title", get_path_value(record, "Basic information.Scientific Title")),
+            ("acronym", get_path_value(record, "Basic information.Acronym")),
+            ("scientific_title_acronym", get_path_value(record, "Basic information.Scientific Title:Acronym")),
+            ("region", get_path_value(record, "Basic information.Region")),
+        ]
+    )
+    protocol["status"] = OrderedDict(
+        [
+            ("recruitment_status", get_path_value(record, "Progress.Recruitment status")),
+            ("registered_date", get_path_value(record, "Management information.Registered date")),
+            ("date_of_disclosure", get_path_value(record, "Other administrative information.Date of disclosure of the study information")),
+            ("last_modified_on", get_path_value(record, "Management information.Last modified on")),
+            ("anticipated_trial_start_date", get_path_value(record, "Progress.Anticipated trial start date")),
+            ("last_follow_up_date", get_path_value(record, "Progress.Last follow-up date")),
+        ]
+    )
+    protocol["condition"] = section_dict(record, "Condition")
+    protocol["objectives"] = section_dict(record, "Objectives")
+    protocol["design"] = section_dict(record, "Study design")
+    protocol["intervention"] = section_dict(record, "Intervention")
+    protocol["outcomes"] = OrderedDict(
+        [
+            ("primary", get_path_value(record, "Assessment.Primary outcomes")),
+            ("secondary", get_path_value(record, "Assessment.Key secondary outcomes")),
+            ("assessment_section", section_dict(record, "Assessment")),
+        ]
+    )
+    protocol["eligibility"] = section_dict(record, "Eligibility")
+    protocol["contacts"] = OrderedDict(
+        [
+            ("research_contact_person", section_dict(record, "Research contact person")),
+            ("public_contact", section_dict(record, "Public contact")),
+        ]
+    )
+    protocol["organizations"] = OrderedDict(
+        [
+            ("sponsor_or_person", section_dict(record, "Sponsor or person")),
+            ("funding_source", section_dict(record, "Funding Source")),
+            ("other_related_organizations", section_dict(record, "Other related organizations")),
+            ("institutions", section_dict(record, "Institutions")),
+        ]
+    )
+    protocol["related_information"] = section_dict(record, "Related information")
+    protocol["result"] = section_dict(record, "Result")
+    protocol["management_information"] = section_dict(record, "Management information")
+    protocol["meta"] = record.meta
+    protocol["sections"] = record.sections
+    return protocol
+
+
+def section_dict(record: StudyRecord, section_name: str) -> OrderedDict[str, object]:
+    return record.sections.get(section_name, OrderedDict())
+
+
+def write_json(path: Path, payload: object) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")

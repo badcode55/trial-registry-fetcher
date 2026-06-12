@@ -8,6 +8,7 @@ from .types import QueryInput
 
 RECEIPT_RE = re.compile(r"^R\d{9}$", re.IGNORECASE)
 UMIN_ID_RE = re.compile(r"^UMIN\d{9}$", re.IGNORECASE)
+NCT_ID_RE = re.compile(r"^NCT\d+$", re.IGNORECASE)
 
 
 def resolve_query(raw_input: str, source_hint: str = "umin_ctr") -> QueryInput:
@@ -27,6 +28,9 @@ def resolve_query(raw_input: str, source_hint: str = "umin_ctr") -> QueryInput:
 
     if UMIN_ID_RE.fullmatch(value):
         return QueryInput(value.upper(), "umin_id", source_hint)
+
+    if NCT_ID_RE.fullmatch(value):
+        return QueryInput(value.upper(), "nct_id", source_hint)
 
     # 当前版本暂不启用关键词搜索，保留接口用于后续扩展。
     # Keyword search is reserved for a later version and intentionally disabled in v1.

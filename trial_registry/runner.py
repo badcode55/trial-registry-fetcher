@@ -9,7 +9,7 @@ from pathlib import Path
 from .exporters import get_exporter
 from .input_readers import get_input_reader
 from .query import resolve_query
-from .sources import get_source
+from .sources import SOURCE_REGISTRY, get_source
 from .types import BatchResult, ExportResult, LiteratureInput, NormalizedRow, StudyRecord
 
 
@@ -46,6 +46,9 @@ def run_query(
     query_input = resolve_query(query, source_hint=source)
     if query_input.query_type == "keyword_search_not_enabled":
         raise ValueError("Keyword search is not enabled in this ID-only version.")
+    if source == "umin_ctr" and query_input.query_type == "nct_id":
+        source = "clinicaltrials_gov"
+        query_input = resolve_query(query, source_hint=source)
     registry_source = get_source(source)
     output_root_path = Path(output_root).expanduser().resolve()
     output_dir = output_root_path / run_id
@@ -86,6 +89,15 @@ def run_query(
             records=records,
             run_id=run_id,
         )
+
+    for record in records:
+        sidecar_files = registry_source.write_sidecar_files(
+            record,
+            output_dir=output_dir,
+            literature=literature,
+        )
+        for key, path in sidecar_files.items():
+            files[key] = path
 
     created_at_utc = datetime.now(timezone.utc).isoformat()
     manifest_path = output_dir / "manifest.json"
@@ -163,7 +175,7 @@ def run_batch(
     index_path = output_root_path / "index.csv"
 
     for item in items:
-        if item.status == "ready" and item.source_hint == "umin_ctr":
+        if item.status == "ready" and item.source_hint in SOURCE_REGISTRY:
             run_id = make_literature_run_id(item)
             try:
                 result = run_query(
@@ -187,6 +199,18 @@ def run_batch(
                     status="failed",
                     message=str(exc),
                 )
+            continue
+
+        if item.status == "ready" and item.source_hint not in SOURCE_REGISTRY:
+            pending_count += 1
+            append_pending_index_row(
+                index_path=index_path,
+                item=item,
+                output_root=output_root_path,
+                formats=formats,
+                status="pending_source_integration",
+                message=f"Registry source {item.source_hint!r} is not integrated yet.",
+            )
             continue
 
         pending_count += 1
