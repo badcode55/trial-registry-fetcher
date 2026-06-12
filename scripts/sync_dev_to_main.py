@@ -103,8 +103,15 @@ def remove_generated_output(repo: Path) -> None:
 def stage_sync_changes(repo: Path) -> None:
     # 只暂存精选同步路径，避免把使用者本地未跟踪笔记或临时文件带入 main。
     # Stage only the curated sync set so local untracked notes/temp files never leak into main.
-    for rel_path in SYNC_PATHS + DEV_ONLY_PATHS:
+    for rel_path in SYNC_PATHS:
         git(["add", "-A", "--", rel_path], repo)
+    for rel_path in DEV_ONLY_PATHS:
+        if (repo / rel_path).exists() or is_tracked(repo, rel_path):
+            git(["add", "-A", "--", rel_path], repo)
+
+
+def is_tracked(repo: Path, rel_path: str) -> bool:
+    return git(["ls-files", "--error-unmatch", rel_path], repo, check=False).returncode == 0
 
 
 def git(args: list[str], repo: Path, *, check: bool = True):
