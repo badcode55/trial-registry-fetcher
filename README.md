@@ -74,17 +74,7 @@ Windows：
 scripts\run_example.bat
 ```
 
-脚本会读取：
-
-```text
-examples/literature_ids.txt
-```
-
-并把结果写入：
-
-```text
-output/
-```
+脚本会读取：`examples/literature_ids.txt` 并把结果写入：`output/`
 
 ## 手动运行示例
 
@@ -152,7 +142,7 @@ UMIN_protocol.json
 manifest.json
 ```
 
-`NCT_protocol.json` 兼容师姐之前使用的 `_protocol.json` 结构。`UMIN_protocol.json` 按 UMIN 网页自己的字段结构保存，不强行套用 NCT 的字段含义。
+`NCT_protocol.json` 兼容之前使用的 `_protocol.json` 结构。`UMIN_protocol.json` 按 UMIN 网页自己的字段结构保存，不强行套用 NCT 的字段含义。
 
 ## 输入文件格式
 
