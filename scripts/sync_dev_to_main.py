@@ -50,15 +50,15 @@ def main() -> int:
     if original_branch != args.source:
         raise SystemExit(f"Please run this from {args.source!r}; current branch is {original_branch!r}.")
 
-    if git(["status", "--short"], repo).strip():
-        raise SystemExit("Working tree is not clean. Commit or stash changes before syncing.")
+    if git(["status", "--short", "--untracked-files=no"], repo).strip():
+        raise SystemExit("Tracked files are not clean. Commit or stash changes before syncing.")
 
     try:
         git(["switch", args.target], repo)
         remove_dev_only_paths(repo)
         restore_paths_from_branch(repo, args.source, SYNC_PATHS)
         remove_generated_output(repo)
-        git(["add", "-A"], repo)
+        stage_sync_changes(repo)
         if git(["diff", "--cached", "--quiet"], repo, check=False).returncode == 0:
             print(f"No user-facing changes to sync into {args.target}.")
         else:
@@ -98,6 +98,13 @@ def remove_generated_output(repo: Path) -> None:
             shutil.rmtree(child)
         else:
             child.unlink()
+
+
+def stage_sync_changes(repo: Path) -> None:
+    # 只暂存精选同步路径，避免把使用者本地未跟踪笔记或临时文件带入 main。
+    # Stage only the curated sync set so local untracked notes/temp files never leak into main.
+    for rel_path in SYNC_PATHS + DEV_ONLY_PATHS:
+        git(["add", "-A", "--", rel_path], repo)
 
 
 def git(args: list[str], repo: Path, *, check: bool = True):
