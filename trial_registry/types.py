@@ -44,6 +44,7 @@ class StudyRecord:
     meta: OrderedDict[str, Any]
     sections: OrderedDict[str, OrderedDict[str, Any]]
     raw_html_optional: str | None = None
+    raw_data_optional: dict[str, Any] | None = None
     match: SearchMatch | None = None
 
 

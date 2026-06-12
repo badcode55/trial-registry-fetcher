@@ -12,6 +12,7 @@ from trial_registry.query import resolve_query
 from trial_registry.registry_ids import resolve_registry_id
 from trial_registry.runner import run_batch, run_query
 from trial_registry.sources import SOURCE_REGISTRY
+from trial_registry.sources.clinicaltrials_gov import ClinicalTrialsGovSource, parse_nct_record
 from trial_registry.sources.umin_ctr import UminCtrSource, parse_detail_page, parse_search_results
 
 
@@ -39,11 +40,79 @@ SEARCH_HTML = """
 </table></body></html>
 """
 
+NCT_API_JSON = {
+    "protocolSection": {
+        "identificationModule": {
+            "nctId": "NCT00508690",
+            "briefTitle": "Trial of Antibiotic Prophylaxis",
+            "officialTitle": "Randomized Controlled Trial of Antibiotic Prophylaxis",
+            "organization": {"fullName": "Japan Multinational Trial Organization"},
+        },
+        "statusModule": {
+            "overallStatus": "COMPLETED",
+            "startDateStruct": {"date": "2007-09"},
+            "primaryCompletionDateStruct": {"date": "2011-12"},
+            "completionDateStruct": {"date": "2011-12"},
+            "studyFirstSubmitDate": "2007-07-27",
+            "studyFirstPostDateStruct": {"date": "2007-07-30"},
+            "lastUpdateSubmitDate": "2012-09-18",
+            "lastUpdatePostDateStruct": {"date": "2012-09-19"},
+        },
+        "designModule": {
+            "studyType": "INTERVENTIONAL",
+            "phases": ["PHASE3"],
+            "designInfo": {
+                "allocation": "RANDOMIZED",
+                "interventionModel": "PARALLEL",
+                "primaryPurpose": "PREVENTION",
+                "maskingInfo": {"masking": "NONE"},
+            },
+            "enrollmentInfo": {"count": 584, "type": "ACTUAL"},
+        },
+        "conditionsModule": {"conditions": ["Colorectal Neoplasms"]},
+        "descriptionModule": {
+            "briefSummary": "The purpose of this study is to determine optimal prophylactic antibiotics.",
+            "detailedDescription": "Detailed trial description.",
+        },
+        "armsInterventionsModule": {
+            "armGroups": [{"label": "IV", "type": "ACTIVE_COMPARATOR"}],
+            "interventions": [{"type": "DRUG", "name": "cefmetazole"}],
+        },
+        "outcomesModule": {
+            "primaryOutcomes": [{"measure": "SSI", "timeFrame": "30 days"}],
+            "secondaryOutcomes": [{"measure": "Complications", "timeFrame": "30 days"}],
+            "otherOutcomes": [],
+        },
+        "eligibilityModule": {
+            "eligibilityCriteria": "Inclusion Criteria:\n* Colorectal tumor",
+            "sex": "ALL",
+            "minimumAge": "20 Years",
+            "maximumAge": None,
+            "healthyVolunteers": False,
+        },
+        "sponsorCollaboratorsModule": {
+            "leadSponsor": {"name": "Japan Multinational Trial Organization"}
+        },
+        "oversightModule": {
+            "oversightHasDmc": True,
+            "isFdaRegulatedDrug": None,
+            "isFdaRegulatedDevice": None,
+        },
+        "contactsLocationsModule": {
+            "overallOfficials": [{"name": "Hiroaki Hata, MD"}],
+            "locations": [{"facility": "Kyoto Univercity Hospital", "country": "Japan"}],
+        },
+    },
+    "derivedSection": {},
+    "hasResults": False,
+}
+
 
 class UminCtrTests(unittest.TestCase):
     def test_query_resolution(self):
         self.assertEqual(resolve_query("R000022360").query_type, "receipt_number")
         self.assertEqual(resolve_query("UMIN000019339").query_type, "umin_id")
+        self.assertEqual(resolve_query("NCT00508690").query_type, "nct_id")
         self.assertEqual(resolve_query("oral antimicrobial prophylaxis").query_type, "keyword_search_not_enabled")
         url = "https://center6.umin.ac.jp/cgi-open-bin/ctr_e/ctr_view.cgi?recptno=R000022360"
         self.assertEqual(resolve_query(url).query_type, "detail_url")
@@ -60,7 +129,8 @@ class UminCtrTests(unittest.TestCase):
         self.assertEqual(umin.status, "ready")
         self.assertEqual(umin.source_hint, "umin_ctr")
         self.assertEqual(nct.registry_type, "nct")
-        self.assertEqual(nct.status, "pending_source_integration")
+        self.assertEqual(nct.status, "ready")
+        self.assertEqual(nct.source_hint, "clinicaltrials_gov")
         self.assertEqual(not_found.status, "not_found")
         self.assertEqual(invalid.status, "invalid_input")
         self.assertEqual(unknown.status, "pending_source_integration")
@@ -129,6 +199,17 @@ class UminCtrTests(unittest.TestCase):
                 self.assertTrue(result.files["csv"].exists())
                 self.assertTrue(result.manifest_path.exists())
                 self.assertEqual(result.files["csv"].name, "test-run.csv")
+                self.assertTrue((result.output_dir / "UMIN_protocol.json").exists())
+                umin_protocol = json.loads(
+                    (result.output_dir / "UMIN_protocol.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(umin_protocol["registration_number"], "UMIN000019339")
+                self.assertEqual(umin_protocol["receipt_number"], "R000022360")
+                self.assertEqual(umin_protocol["identification"]["region"], "Japan")
+                self.assertEqual(
+                    umin_protocol["sections"]["Intervention"]["Type of intervention"],
+                    "Medicine",
+                )
 
                 self.assertEqual(result.files["csv"].read_bytes()[:3], b"\xef\xbb\xbf")
                 index_path = result.output_dir.parent / "index.csv"
@@ -153,6 +234,7 @@ class UminCtrTests(unittest.TestCase):
                 manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
                 self.assertEqual(manifest["index_path"], str(index_path))
                 self.assertEqual(manifest["files"]["csv"], str(result.files["csv"]))
+                self.assertEqual(manifest["files"]["umin_protocol"], str(result.output_dir / "UMIN_protocol.json"))
         finally:
             SOURCE_REGISTRY.pop("fake_umin", None)
 
@@ -204,9 +286,17 @@ class UminCtrTests(unittest.TestCase):
             def fetch_detail(self, match):
                 return parse_detail_page(DETAIL_HTML, detail_url=match.detail_url, match=match)
 
+        class FakeNctSource(ClinicalTrialsGovSource):
+            name = "clinicaltrials_gov"
+
+            def fetch_detail(self, match):
+                return parse_nct_record(NCT_API_JSON, detail_url=match.detail_url, match=match)
+
         SOURCE_REGISTRY["fake_umin_batch"] = FakeSource
         original_umin = SOURCE_REGISTRY.get("umin_ctr")
+        original_nct = SOURCE_REGISTRY.get("clinicaltrials_gov")
         SOURCE_REGISTRY["umin_ctr"] = FakeSource
+        SOURCE_REGISTRY["clinicaltrials_gov"] = FakeNctSource
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 input_path = Path(tmpdir) / "literature_ids.txt"
@@ -230,10 +320,10 @@ class UminCtrTests(unittest.TestCase):
                 )
 
                 self.assertEqual(result.total_count, 5)
-                self.assertEqual(result.saved_count, 1)
-                self.assertEqual(result.pending_count, 4)
+                self.assertEqual(result.saved_count, 2)
+                self.assertEqual(result.pending_count, 3)
                 self.assertEqual(result.failure_count, 0)
-                self.assertEqual(len(result.results), 1)
+                self.assertEqual(len(result.results), 2)
                 self.assertTrue(result.results[0].files["csv"].exists())
 
                 with result.index_path.open(encoding="utf-8-sig", newline="") as handle:
@@ -242,7 +332,7 @@ class UminCtrTests(unittest.TestCase):
                 self.assertEqual(len(rows), 5)
                 statuses = {row["literature_file"]: row["status"] for row in rows}
                 self.assertEqual(statuses["11 Ikeda 2016.pdf"], "saved")
-                self.assertEqual(statuses["11 Arezzo 2021.pdf"], "pending_source_integration")
+                self.assertEqual(statuses["11 Arezzo 2021.pdf"], "saved")
                 self.assertEqual(statuses["11 Horie 2007.pdf"], "not_found")
                 self.assertEqual(statuses["11 Future 2025.pdf"], "pending_source_integration")
                 self.assertIn("invalid_input", [row["status"] for row in rows])
@@ -251,7 +341,91 @@ class UminCtrTests(unittest.TestCase):
         finally:
             if original_umin is not None:
                 SOURCE_REGISTRY["umin_ctr"] = original_umin
+            if original_nct is not None:
+                SOURCE_REGISTRY["clinicaltrials_gov"] = original_nct
             SOURCE_REGISTRY.pop("fake_umin_batch", None)
+
+    def test_nct_protocol_json_matches_senior_format(self):
+        match = ClinicalTrialsGovSource().search(resolve_query("NCT00508690", source_hint="clinicaltrials_gov"))[0]
+        record = parse_nct_record(NCT_API_JSON, detail_url=match.detail_url, match=match)
+        row = ClinicalTrialsGovSource().normalize(
+            record,
+            run_id="nct-test",
+            query=resolve_query("NCT00508690", source_hint="clinicaltrials_gov"),
+            match_count=1,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            files = ClinicalTrialsGovSource().write_sidecar_files(
+                record,
+                output_dir=Path(tmpdir),
+                literature=resolve_registry_id(
+                    "11 Hata 2016.pdf",
+                    "NCT00508690",
+                    "- 11 Hata 2016.pdf: NCT00508690",
+                ),
+            )
+            protocol = json.loads(files["nct_protocol"].read_text(encoding="utf-8"))
+
+        self.assertEqual(row["nct_id"], "NCT00508690")
+        self.assertEqual(row["overall_status"], "COMPLETED")
+        self.assertEqual(files["nct_protocol"].name, "NCT_protocol.json")
+        self.assertEqual(files["nct_raw"].name, "NCT_raw.json")
+        self.assertEqual(
+            list(protocol.keys()),
+            [
+                "registration_number",
+                "source_file",
+                "source_registry",
+                "identification",
+                "status",
+                "design",
+                "conditions",
+                "brief_summary",
+                "detailed_description",
+                "arms",
+                "interventions",
+                "outcomes",
+                "eligibility",
+                "oversight",
+                "contacts_locations",
+            ],
+        )
+        self.assertEqual(protocol["registration_number"], "NCT00508690")
+        self.assertEqual(protocol["source_file"], "11 Hata 2016.pdf")
+        self.assertEqual(protocol["source_registry"], "ClinicalTrials.gov")
+        self.assertEqual(protocol["identification"]["nct_id"], "NCT00508690")
+
+    def test_run_query_auto_routes_nct_and_writes_sidecars(self):
+        class FakeNctSource(ClinicalTrialsGovSource):
+            name = "clinicaltrials_gov"
+
+            def fetch_detail(self, match):
+                return parse_nct_record(NCT_API_JSON, detail_url=match.detail_url, match=match)
+
+        original_nct = SOURCE_REGISTRY.get("clinicaltrials_gov")
+        SOURCE_REGISTRY["clinicaltrials_gov"] = FakeNctSource
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                result = run_query(
+                    "NCT00508690",
+                    formats=["csv"],
+                    output_root=tmpdir,
+                    run_id="nct-run",
+                )
+                self.assertEqual(result.match_count, 1)
+                self.assertEqual(result.failure_count, 0)
+                self.assertTrue(result.files["csv"].exists())
+                self.assertTrue((result.output_dir / "NCT_protocol.json").exists())
+                self.assertTrue((result.output_dir / "NCT_raw.json").exists())
+                manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+                self.assertEqual(manifest["source"], "clinicaltrials_gov")
+                self.assertEqual(manifest["files"]["nct_protocol"], str(result.output_dir / "NCT_protocol.json"))
+        finally:
+            if original_nct is not None:
+                SOURCE_REGISTRY["clinicaltrials_gov"] = original_nct
+            else:
+                SOURCE_REGISTRY.pop("clinicaltrials_gov", None)
 
 
 if __name__ == "__main__":

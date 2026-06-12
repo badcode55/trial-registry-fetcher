@@ -34,4 +34,5 @@ class JSONExporter(Exporter):
 def record_to_dict(record: StudyRecord) -> dict:
     data = asdict(record)
     data.pop("raw_html_optional", None)
+    data.pop("raw_data_optional", None)
     return data

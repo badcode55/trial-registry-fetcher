@@ -38,7 +38,8 @@ SEARCH_HTML = """
 def test_query_resolution():
     assert resolve_query("R000022360").query_type == "receipt_number"
     assert resolve_query("UMIN000019339").query_type == "umin_id"
-    assert resolve_query("oral antimicrobial prophylaxis").query_type == "title"
+    assert resolve_query("NCT00508690").query_type == "nct_id"
+    assert resolve_query("oral antimicrobial prophylaxis").query_type == "keyword_search_not_enabled"
     assert resolve_query("https://center6.umin.ac.jp/cgi-open-bin/ctr_e/ctr_view.cgi?recptno=R000022360").query_type == "detail_url"
 
 

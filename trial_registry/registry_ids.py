@@ -48,13 +48,9 @@ def resolve_registry_id(literature_file: str, registry_id: str, raw_line: str) -
             literature_file=literature_file,
             registry_id=value.upper(),
             registry_type="nct",
-            status="pending_source_integration",
+            status="ready",
             raw_line=raw_line,
-            source_hint="clinicaltrials_gov_pending",
-            message=(
-                "NCT fetching will be integrated with the external implementation later; "
-                "this placeholder keeps the adapter boundary stable."
-            ),
+            source_hint="clinicaltrials_gov",
         )
 
     if looks_like_keyword(value):

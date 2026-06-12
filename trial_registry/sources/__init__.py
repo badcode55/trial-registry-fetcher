@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from .base import RegistrySource
+from .clinicaltrials_gov import ClinicalTrialsGovSource
 from .umin_ctr import UminCtrSource
 
 
 SOURCE_REGISTRY: dict[str, type[RegistrySource]] = {
+    ClinicalTrialsGovSource.name: ClinicalTrialsGovSource,
     UminCtrSource.name: UminCtrSource,
 }
 

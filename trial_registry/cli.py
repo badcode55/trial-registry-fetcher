@@ -11,7 +11,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fetch trial registry records from known literature registry IDs."
     )
-    parser.add_argument("input", nargs="?", help="UMIN ID, receipt number, or detail URL.")
+    parser.add_argument("input", nargs="?", help="UMIN ID, NCT ID, receipt number, or detail URL.")
     parser.add_argument(
         "--input-file",
         default=None,
@@ -22,7 +22,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="txt",
         help="Batch input format. Available now: txt. Default: txt",
     )
-    parser.add_argument("--source", default="umin_ctr", help="Registry source. Default: umin_ctr")
+    parser.add_argument(
+        "--source",
+        default="umin_ctr",
+        help="Registry source. Default: umin_ctr. NCT IDs are auto-routed to clinicaltrials_gov.",
+    )
     parser.add_argument(
         "--formats",
         default="csv",
