@@ -27,10 +27,7 @@
 ├── scripts/
 │   ├── run_example.sh                macOS/Linux 终端运行脚本
 │   ├── run_example.command           macOS 双击运行脚本
-│   ├── run_example.bat               Windows 运行脚本
-│   ├── sync_dev_to_main.py           将 dev 的可运行内容同步到 main
-│   ├── sync_dev_to_main.sh           macOS/Linux 同步脚本入口
-│   └── sync_dev_to_main.bat          Windows 同步脚本入口
+│   └── run_example.bat               Windows 运行脚本
 ├── trial_registry/                   程序代码
 │   ├── cli.py                        命令行入口
 │   ├── runner.py                     批量处理、导出和索引逻辑
@@ -175,25 +172,9 @@ TXT 文件每行写一篇文献：
 
 1. 在 `trial_registry/registry_ids.py` 增加 ID 识别规则。
 2. 在 `trial_registry/sources/` 增加一个新的 `RegistrySource` 适配器。
-3. 在 `跨注册库JSON canonical protocol JSON 设计.md` 记录该来源和其他来源之间可映射、弱映射、不可映射的字段。
+3. 在 dev 分支的设计记录文档中记录该来源和其他来源之间可映射、弱映射、不可映射的字段。
 
 如果新来源需要额外 JSON 文件，请在 source adapter 中实现 `write_sidecar_files`，不要把来源判断写进主流程。
-
-## dev 同步到 main
-
-开发完成并提交到 `dev` 后，可以运行：
-
-```bash
-bash scripts/sync_dev_to_main.sh
-```
-
-这个脚本只把使用者需要运行程序的内容同步到 `main`。它不会同步 `PROJECT_PLAN.md`、`tests/`、`跨注册库JSON canonical protocol JSON 设计.md` 或运行输出。
-
-默认不会推送 GitHub。如果需要同步后推送：
-
-```bash
-bash scripts/sync_dev_to_main.sh --push
-```
 
 ## 测试
 
