@@ -1,0 +1,22 @@
+[
+  {
+    "source": "chictr",
+    "registry_id": "ChiCTR2600126676",
+    "expected_url": "https://www.chictr.org.cn/showprojEN.html?proj=327816"
+  },
+  {
+    "source": "anzctr",
+    "registry_id": "ACTRN12626000671369",
+    "expected_url": "https://www.anzctr.org.au/Trial/Registration/TrialReview.aspx?id=391548&isReview=true"
+  },
+  {
+    "source": "ctis",
+    "registry_id": "2025-523616-36-00",
+    "expected_url": "https://euclinicaltrials.eu/search-for-clinical-trials/?lang=en&EUCT=2025-523616-36-00"
+  },
+  {
+    "source": "china_drug_trials",
+    "registry_id": "CTR20223406",
+    "expected_status": "blocked_by_site"
+  }
+]

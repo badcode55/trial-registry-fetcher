@@ -1,0 +1,44 @@
+{
+  "showWarning": false,
+  "pagination": {
+    "totalRecords": 1,
+    "currentPage": 1,
+    "totalPages": 1,
+    "nextPage": false,
+    "prevPage": false
+  },
+  "data": [
+    {
+      "ctNumber": "2025-523616-36-00",
+      "ctStatus": 2,
+      "ctTitle": "Exploratory study evaluating the relevance of [68Ga]Ga-FAPI-46 for staging and identifying progressing patients with transthyretin cardiac amyloidosis",
+      "shortTitle": "RC25_0276",
+      "conditions": "Transthyretin cardiac amyloidosis",
+      "trialCountries": [
+        "France:2"
+      ],
+      "decisionDateOverall": "13/06/2026",
+      "decisionDate": "FR: 13/06/2026",
+      "therapeuticAreas": [
+        "Analytical, Diagnostic and Therapeutic Techniques and Equipment [E] - Diagnosis [E01]",
+        "Diseases [C] - Cardiovascular Diseases [C14]"
+      ],
+      "sponsor": "Centre Hospitalier Universitaire De Nantes",
+      "sponsorType": "Hospital/Clinic/Other health care facility",
+      "trialPhase": "Therapeutic exploratory (Phase II)",
+      "endPoint": "Tolerance of [68Ga]Ga-FAPI-46 cardiac PET will be assessed by clinical monitoring.",
+      "product": "[68Ga]Ga-FAPI-46",
+      "ageRangeSecondary": [
+        ""
+      ],
+      "ageGroup": "18-64 years, 65+ years",
+      "gender": "Female, Male",
+      "trialRegion": 1,
+      "totalNumberEnrolled": "30",
+      "primaryEndPoint": "Evaluate safety and imaging relevance.",
+      "resultsFirstReceived": "No",
+      "lastUpdated": "13/06/2026",
+      "lastPublicationUpdate": "13/06/2026"
+    }
+  ]
+}

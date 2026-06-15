@@ -205,6 +205,11 @@ class UminCtrTests(unittest.TestCase):
                 )
                 self.assertEqual(umin_protocol["registration_number"], "UMIN000019339")
                 self.assertEqual(umin_protocol["receipt_number"], "R000022360")
+                self.assertEqual(umin_protocol["fetch_status"], "fetched")
+                self.assertIn("protocol_sections", umin_protocol)
+                self.assertIn("results_sections", umin_protocol)
+                self.assertIn("raw_evidence_files", umin_protocol)
+                self.assertTrue((result.output_dir / "UMIN_raw.html").exists())
                 self.assertEqual(umin_protocol["identification"]["region"], "Japan")
                 self.assertEqual(
                     umin_protocol["sections"]["Intervention"]["Type of intervention"],
@@ -235,6 +240,9 @@ class UminCtrTests(unittest.TestCase):
                 self.assertEqual(manifest["index_path"], str(index_path))
                 self.assertEqual(manifest["files"]["csv"], str(result.files["csv"]))
                 self.assertEqual(manifest["files"]["umin_protocol"], str(result.output_dir / "UMIN_protocol.json"))
+                self.assertEqual(manifest["detail_fetched"], True)
+                self.assertEqual(manifest["fetch_statuses"], ["fetched"])
+                self.assertIn("umin_raw_html", manifest["raw_evidence_files"])
         finally:
             SOURCE_REGISTRY.pop("fake_umin", None)
 
@@ -366,35 +374,35 @@ class UminCtrTests(unittest.TestCase):
                 ),
             )
             protocol = json.loads(files["nct_protocol"].read_text(encoding="utf-8"))
+            raw_payload = files["nct_raw"].read_text(encoding="utf-8")
 
         self.assertEqual(row["nct_id"], "NCT00508690")
         self.assertEqual(row["overall_status"], "COMPLETED")
         self.assertEqual(files["nct_protocol"].name, "NCT_protocol.json")
         self.assertEqual(files["nct_raw"].name, "NCT_raw.json")
-        self.assertEqual(
-            list(protocol.keys()),
-            [
-                "registration_number",
-                "source_file",
-                "source_registry",
-                "identification",
-                "status",
-                "design",
-                "conditions",
-                "brief_summary",
-                "detailed_description",
-                "arms",
-                "interventions",
-                "outcomes",
-                "eligibility",
-                "oversight",
-                "contacts_locations",
-            ],
-        )
+        for key in [
+            "source_registry",
+            "registration_number",
+            "source_file",
+            "detail_url",
+            "fetched_at",
+            "fetch_status",
+            "protocol_sections",
+            "results_sections",
+            "source_specific",
+            "raw_evidence_files",
+            "identification",
+            "status",
+            "design",
+            "outcomes",
+        ]:
+            self.assertIn(key, protocol)
         self.assertEqual(protocol["registration_number"], "NCT00508690")
         self.assertEqual(protocol["source_file"], "11 Hata 2016.pdf")
         self.assertEqual(protocol["source_registry"], "ClinicalTrials.gov")
+        self.assertEqual(protocol["fetch_status"], "fetched")
         self.assertEqual(protocol["identification"]["nct_id"], "NCT00508690")
+        self.assertIn("protocolSection", raw_payload)
 
     def test_run_query_auto_routes_nct_and_writes_sidecars(self):
         class FakeNctSource(ClinicalTrialsGovSource):

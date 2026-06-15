@@ -45,6 +45,9 @@ class StudyRecord:
     sections: OrderedDict[str, OrderedDict[str, Any]]
     raw_html_optional: str | None = None
     raw_data_optional: dict[str, Any] | None = None
+    raw_text_optional: str | None = None
+    fetch_status: str = "fetched"
+    fetch_note: str = ""
     match: SearchMatch | None = None
 
 
@@ -59,6 +62,7 @@ class ExportResult:
     manifest_path: Path
     match_count: int
     failure_count: int
+    status: str = ""
 
 
 @dataclass
