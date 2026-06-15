@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
                             "manifest": str(item.manifest_path),
                             "match_count": item.match_count,
                             "failure_count": item.failure_count,
+                            "status": item.status,
                         }
                         for item in result.results
                     ],
@@ -96,10 +97,11 @@ def main(argv: list[str] | None = None) -> int:
                 "run_id": result.run_id,
                 "output_dir": str(result.output_dir),
                 "files": {key: str(path) for key, path in result.files.items()},
-                "manifest": str(result.manifest_path),
-                "match_count": result.match_count,
-                "failure_count": result.failure_count,
-            },
+            "manifest": str(result.manifest_path),
+            "match_count": result.match_count,
+            "failure_count": result.failure_count,
+            "status": result.status,
+        },
             ensure_ascii=False,
             indent=2,
         )

@@ -11,6 +11,7 @@ from ..http import fetch_json
 from ..text import stringify
 from ..types import LiteratureInput, NormalizedRow, QueryInput, SearchMatch, StudyRecord
 from .base import RegistrySource
+from .protocol import build_source_protocol, write_raw_evidence_files
 
 
 RECORD_URL = "https://clinicaltrials.gov/study/{nct_id}"
@@ -104,16 +105,19 @@ class ClinicalTrialsGovSource(RegistrySource):
         output_dir: Path,
         literature: LiteratureInput | None = None,
     ) -> dict[str, Path]:
-        raw_path = output_dir / "NCT_raw.json"
         protocol_path = output_dir / "NCT_protocol.json"
         raw = record.raw_data_optional or {}
+        raw_files = write_raw_evidence_files(record, output_dir=output_dir, basename="NCT", json_payload=raw)
         protocol = build_nct_protocol(
             record,
             source_file=literature.literature_file if literature else "",
+            raw_evidence_files=raw_files,
         )
-        write_json(raw_path, raw)
         write_json(protocol_path, protocol)
-        return {"nct_raw": raw_path, "nct_protocol": protocol_path}
+        files = {"nct_protocol": protocol_path}
+        if "raw_json" in raw_files:
+            files["nct_raw"] = raw_files["raw_json"]
+        return files
 
 
 def parse_nct_record(
@@ -151,13 +155,20 @@ def parse_nct_record(
         meta=meta,
         sections=sections,
         raw_data_optional=raw,
+        fetch_status="fetched",
         match=match,
     )
 
 
-def build_nct_protocol(record: StudyRecord, *, source_file: str = "") -> dict[str, Any]:
+def build_nct_protocol(
+    record: StudyRecord,
+    *,
+    source_file: str = "",
+    raw_evidence_files: dict[str, Path] | None = None,
+) -> dict[str, Any]:
     raw = record.raw_data_optional or {}
     ps = raw.get("protocolSection", {})
+    results_section = raw.get("resultsSection") or {}
     idm = ps.get("identificationModule", {})
     status = ps.get("statusModule", {})
     design = ps.get("designModule", {})
@@ -171,12 +182,7 @@ def build_nct_protocol(record: StudyRecord, *, source_file: str = "") -> dict[st
     design_info = design.get("designInfo", {}) or {}
     masking_info = design_info.get("maskingInfo", {}) or {}
 
-    # 此结构兼容师姐 notebook 中的 _protocol.json，便于直接复用现有分析流程。
-    # This shape follows the senior collaborator's _protocol.json for workflow compatibility.
-    return {
-        "registration_number": record.record_id,
-        "source_file": source_file,
-        "source_registry": "ClinicalTrials.gov",
+    compatibility_blocks = {
         "identification": {
             "nct_id": idm.get("nctId"),
             "brief_title": idm.get("briefTitle"),
@@ -228,6 +234,21 @@ def build_nct_protocol(record: StudyRecord, *, source_file: str = "") -> dict[st
         },
         "contacts_locations": contacts,
     }
+    source_protocol = build_source_protocol(
+        record,
+        source_registry="ClinicalTrials.gov",
+        source_file=source_file,
+        protocol_sections=ps,
+        results_sections=results_section,
+        source_specific={
+            "has_results": raw.get("hasResults"),
+            "derivedSection": raw.get("derivedSection", {}),
+            "documentSection": raw.get("documentSection", {}),
+        },
+        raw_evidence_files=raw_evidence_files,
+        extra=compatibility_blocks,
+    )
+    return dict(source_protocol)
 
 
 def json_cell(value: Any) -> str:

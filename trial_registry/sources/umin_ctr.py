@@ -13,6 +13,7 @@ from ..http import fetch_html
 from ..text import extract_fragment_text, insert_value, iter_flattened, normalize_text, slugify
 from ..types import LiteratureInput, NormalizedRow, QueryInput, SearchMatch, StudyRecord
 from .base import RegistrySource
+from .protocol import split_protocol_and_results_sections, write_raw_evidence_files
 
 
 DETAIL_BASE_URL = "https://center6.umin.ac.jp/cgi-open-bin/ctr_e/ctr_view.cgi?recptno={recptno}"
@@ -195,14 +196,19 @@ class UminCtrSource(RegistrySource):
         literature: LiteratureInput | None = None,
     ) -> dict[str, Path]:
         protocol_path = output_dir / "UMIN_protocol.json"
+        raw_files = write_raw_evidence_files(record, output_dir=output_dir, basename="UMIN")
         write_json(
             protocol_path,
             build_umin_protocol(
                 record,
                 source_file=literature.literature_file if literature else "",
+                raw_evidence_files=raw_files,
             ),
         )
-        return {"umin_protocol": protocol_path}
+        files = {"umin_protocol": protocol_path}
+        if "raw_html" in raw_files:
+            files["umin_raw_html"] = raw_files["raw_html"]
+        return files
 
 
 def extract_recptno(target: str) -> str:
@@ -232,6 +238,7 @@ def parse_detail_page(html: str, *, detail_url: str, match: SearchMatch | None =
         meta=meta,
         sections=sections,
         raw_html_optional=html,
+        fetch_status="fetched",
         match=match,
     )
 
@@ -366,7 +373,12 @@ def stringify_meta_from_mapping(mapping: OrderedDict[str, object], key: str) -> 
     return str(value) if value is not None else ""
 
 
-def build_umin_protocol(record: StudyRecord, *, source_file: str = "") -> OrderedDict[str, object]:
+def build_umin_protocol(
+    record: StudyRecord,
+    *,
+    source_file: str = "",
+    raw_evidence_files: dict[str, Path] | None = None,
+) -> OrderedDict[str, object]:
     # UMIN 不强行套用 NCT protocolSection，避免把不同来源的字段语义混在一起。
     # UMIN keeps its own source-shaped protocol JSON instead of pretending to be NCT protocolSection.
     protocol: OrderedDict[str, object] = OrderedDict()
@@ -376,6 +388,15 @@ def build_umin_protocol(record: StudyRecord, *, source_file: str = "") -> Ordere
     protocol["source_registry"] = "UMIN-CTR"
     protocol["detail_url"] = record.detail_url
     protocol["fetched_at"] = record.fetched_at
+    protocol["fetch_status"] = record.fetch_status
+    protocol["fetch_note"] = record.fetch_note
+    protocol_sections, results_sections = split_protocol_and_results_sections(record.sections)
+    protocol["protocol_sections"] = protocol_sections
+    protocol["results_sections"] = results_sections
+    protocol["source_specific"] = OrderedDict([("meta", record.meta)])
+    protocol["raw_evidence_files"] = OrderedDict(
+        (key, str(path)) for key, path in sorted((raw_evidence_files or {}).items())
+    )
     protocol["identification"] = OrderedDict(
         [
             ("umin_id", stringify_meta(record, "Unique ID issued by UMIN")),

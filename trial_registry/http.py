@@ -28,3 +28,23 @@ def fetch_json(url: str, *, timeout: int = 30) -> dict[str, Any]:
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     with urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8", errors="replace"))
+
+
+def post_json(
+    url: str,
+    payload: Any,
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: int = 30,
+) -> Any:
+    request_headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json,text/plain,*/*",
+        "Content-Type": "application/json",
+    }
+    if headers:
+        request_headers.update(headers)
+    body = json.dumps(payload).encode("utf-8")
+    request = Request(url, data=body, headers=request_headers, method="POST")
+    with urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8", errors="replace"))

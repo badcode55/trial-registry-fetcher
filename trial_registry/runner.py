@@ -27,6 +27,12 @@ INDEX_FIELDNAMES = [
     "saved_count",
     "failure_count",
     "result_csv",
+    "detail_url",
+    "detail_fetched",
+    "fetch_status",
+    "has_results_sections",
+    "source_protocol_json",
+    "raw_evidence_files",
     "manifest_path",
     "formats",
     "message",
@@ -46,8 +52,8 @@ def run_query(
     query_input = resolve_query(query, source_hint=source)
     if query_input.query_type == "keyword_search_not_enabled":
         raise ValueError("Keyword search is not enabled in this ID-only version.")
-    if source == "umin_ctr" and query_input.query_type == "nct_id":
-        source = "clinicaltrials_gov"
+    if source == "umin_ctr" and query_input.source_hint in SOURCE_REGISTRY and query_input.source_hint != source:
+        source = query_input.source_hint
         query_input = resolve_query(query, source_hint=source)
     registry_source = get_source(source)
     output_root_path = Path(output_root).expanduser().resolve()
@@ -63,14 +69,6 @@ def run_query(
         try:
             record = registry_source.fetch_detail(match)
             records.append(record)
-            rows.append(
-                registry_source.normalize(
-                    record,
-                    run_id=run_id,
-                    query=query_input,
-                    match_count=len(matches),
-                )
-            )
         except Exception as exc:  # pragma: no cover - captured in manifest for batch runs
             failures.append(
                 {
@@ -80,17 +78,29 @@ def run_query(
                 }
             )
 
-    files: dict[str, Path] = {}
-    for output_format in formats:
-        exporter = get_exporter(output_format)
-        files[exporter.name] = exporter.export(
-            output_dir=output_dir,
-            rows=rows,
-            records=records,
-            run_id=run_id,
+    export_records = [record for record in records if record.fetch_status == "fetched"]
+    for record in export_records:
+        rows.append(
+            registry_source.normalize(
+                record,
+                run_id=run_id,
+                query=query_input,
+                match_count=len(matches),
+            )
         )
 
-    for record in records:
+    files: dict[str, Path] = {}
+    if export_records:
+        for output_format in formats:
+            exporter = get_exporter(output_format)
+            files[exporter.name] = exporter.export(
+                output_dir=output_dir,
+                rows=rows,
+                records=export_records,
+                run_id=run_id,
+            )
+
+    for record in export_records:
         sidecar_files = registry_source.write_sidecar_files(
             record,
             output_dir=output_dir,
@@ -103,16 +113,30 @@ def run_query(
     manifest_path = output_dir / "manifest.json"
     index_path = output_root_path / "index.csv"
     result_csv = files.get("csv")
+    fetch_statuses = collect_fetch_statuses(records)
+    detail_urls = collect_detail_urls(records)
+    source_protocol_files = collect_source_protocol_files(files)
+    raw_evidence_files = collect_raw_evidence_files(files)
+    has_results_sections = any(record_has_results_sections(record) for record in records)
+    detail_fetched = any(record.fetch_status == "fetched" for record in records)
+    query_status = determine_run_status(records, failures)
     manifest = {
         "run_id": run_id,
         "query": asdict(query_input),
         "source": source,
         "formats": formats,
         "match_count": len(matches),
-        "saved_count": len(records),
+        "saved_count": len(export_records),
         "failure_count": len(failures),
         "failures": failures,
         "files": {key: str(path) for key, path in files.items()},
+        "detail_urls": detail_urls,
+        "detail_fetched": detail_fetched,
+        "fetch_statuses": fetch_statuses,
+        "has_results_sections": has_results_sections,
+        "source_protocol_files": {key: str(path) for key, path in source_protocol_files.items()},
+        "raw_evidence_files": {key: str(path) for key, path in raw_evidence_files.items()},
+        "status": query_status,
         "index_path": str(index_path),
         "created_at_utc": created_at_utc,
     }
@@ -128,14 +152,20 @@ def run_query(
             "literature_file": literature.literature_file if literature else "",
             "registry_id": literature.registry_id if literature else query_input.raw_input,
             "registry_type": literature.registry_type if literature else infer_registry_type(query_input.raw_input),
-            "status": "saved" if records and not failures else ("failed" if failures else "no_match"),
+            "status": query_status,
             "source": source,
             "query_value": query_input.raw_input,
             "query_type": query_input.query_type,
             "match_count": str(len(matches)),
-            "saved_count": str(len(records)),
+            "saved_count": str(len(export_records)),
             "failure_count": str(len(failures)),
             "result_csv": str(result_csv) if result_csv else "",
+            "detail_url": ";".join(detail_urls),
+            "detail_fetched": "yes" if detail_fetched else "no",
+            "fetch_status": ";".join(fetch_statuses),
+            "has_results_sections": "yes" if has_results_sections else "no",
+            "source_protocol_json": ";".join(str(path) for path in source_protocol_files.values()),
+            "raw_evidence_files": ";".join(str(path) for path in raw_evidence_files.values()),
             "manifest_path": str(manifest_path),
             "formats": ",".join(formats),
             "message": literature.message if literature else "",
@@ -149,6 +179,7 @@ def run_query(
         manifest_path=manifest_path,
         match_count=len(matches),
         failure_count=len(failures),
+        status=query_status,
     )
 
 
@@ -187,7 +218,10 @@ def run_batch(
                     literature=item,
                 )
                 results.append(result)
-                saved_count += 1 if result.failure_count == 0 else 0
+                if result.failure_count == 0 and result.status == "saved":
+                    saved_count += 1
+                elif result.failure_count == 0:
+                    pending_count += 1
                 failure_count += result.failure_count
             except Exception as exc:
                 failure_count += 1
@@ -269,6 +303,12 @@ def append_pending_index_row(
             "saved_count": "0",
             "failure_count": "0" if status not in {"failed", "invalid_input"} else "1",
             "result_csv": "",
+            "detail_url": "",
+            "detail_fetched": "no",
+            "fetch_status": status,
+            "has_results_sections": "no",
+            "source_protocol_json": "",
+            "raw_evidence_files": "",
             "manifest_path": "",
             "formats": ",".join(formats),
             "message": message,
@@ -289,4 +329,84 @@ def infer_registry_type(value: str) -> str:
         return "umin"
     if upper.startswith("NCT"):
         return "nct"
+    if upper.startswith("ISRCTN"):
+        return "isrctn"
+    if re_fullmatch(r"CHICTR(?:-[A-Z]{2,5}-\d{5,12}|\d{6,12})", upper):
+        return "chictr"
+    if re_fullmatch(r"CTR\d{8}", upper):
+        return "china_drug_trials"
+    if re_fullmatch(r"(?:ACTRN|ANZCTR-?)\d{10,20}", upper):
+        return "anzctr"
+    if re_fullmatch(r"(?:EUCTR|EUDRACT)?\s*\d{4}-\d{6}-\d{2}", upper):
+        return "euctr"
+    if re_fullmatch(r"\d{4}-\d{6}-\d{2}-\d{2}", upper):
+        return "ctis"
     return ""
+
+
+def re_fullmatch(pattern: str, value: str) -> bool:
+    import re
+
+    return re.fullmatch(pattern, value, flags=re.IGNORECASE) is not None
+
+
+def collect_fetch_statuses(records: list[StudyRecord]) -> list[str]:
+    statuses: list[str] = []
+    for record in records:
+        status = record.fetch_status or "unknown"
+        if status not in statuses:
+            statuses.append(status)
+    return statuses
+
+
+def collect_detail_urls(records: list[StudyRecord]) -> list[str]:
+    urls: list[str] = []
+    for record in records:
+        if record.detail_url and record.detail_url not in urls:
+            urls.append(record.detail_url)
+    return urls
+
+
+def collect_source_protocol_files(files: dict[str, Path]) -> dict[str, Path]:
+    return {
+        key: path
+        for key, path in files.items()
+        if key.endswith("_protocol") or path.name.endswith("_protocol.json")
+    }
+
+
+def collect_raw_evidence_files(files: dict[str, Path]) -> dict[str, Path]:
+    return {
+        key: path
+        for key, path in files.items()
+        if key.endswith("_raw")
+        or key.endswith("_raw_html")
+        or key.endswith("_raw_text")
+        or path.name.endswith("_raw.json")
+        or path.name.endswith("_raw.html")
+        or path.name.endswith("_raw.txt")
+    }
+
+
+def record_has_results_sections(record: StudyRecord) -> bool:
+    for section_name in record.sections:
+        lowered = section_name.lower()
+        if any(keyword in lowered for keyword in ("result", "outcome", "adverse", "publication")):
+            return True
+    raw = record.raw_data_optional or {}
+    return bool(raw.get("resultsSection"))
+
+
+def determine_run_status(records: list[StudyRecord], failures: list[dict[str, str]]) -> str:
+    if failures and not records:
+        return "failed"
+    if not records:
+        return "no_match"
+    statuses = collect_fetch_statuses(records)
+    if all(status == "fetched" for status in statuses) and not failures:
+        return "saved"
+    if any(status in {"ambiguous", "blocked_by_site", "not_found", "parse_failed", "search_required"} for status in statuses):
+        return ";".join(statuses)
+    if failures:
+        return "partial_failed"
+    return "saved"
